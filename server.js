@@ -2,36 +2,65 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
+
 const app = express();
 
 // Enable CORS for all origins
 app.use(cors());
-
 app.use(express.json());
 
-const SHOP = process.env.SHOPIFY_STORE;
-const TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
+// Shopify Storefront settings
+const SHOP = process.env.SHOPIFY_STORE; // e.g., 'nr1mrt-5a.myshopify.com'
+const STOREFRONT_TOKEN = process.env.SHOPIFY_STOREFRONT_TOKEN; // Storefront access token
 
-// Example endpoint: Add custom bid to cart
+// Endpoint to add bid to cart
 app.post('/add-bid', async (req, res) => {
   const { variantId, quantity, bidAmount } = req.body;
 
   try {
-    const response = await axios.post(
-      `https://${SHOP}/admin/api/2025-07/carts.json`,
-      {
-        cart: {
-          lines: [
-            {
-              quantity,
-              merchandise_id: variantId,
-              properties: { "Accepted Bid Price": bidAmount }
+    const mutation = `
+      mutation cartCreate($lines: [CartLineInput!]!) {
+        cartCreate(input: { lines: $lines }) {
+          cart {
+            id
+            lines(first: 10) {
+              edges {
+                node {
+                  id
+                  quantity
+                  attributes {
+                    key
+                    value
+                  }
+                }
+              }
             }
-          ]
+          }
         }
-      },
-      { headers: { 'X-Shopify-Access-Token': TOKEN } }
+      }
+    `;
+
+    const variables = {
+      lines: [
+        {
+          merchandiseId: variantId,
+          quantity,
+          attributes: { "Accepted Bid Price": bidAmount.toString() }
+        }
+      ]
+    };
+
+    const response = await axios.post(
+      `https://${SHOP}/api/2025-07/graphql.json`,
+      { query: mutation, variables },
+      {
+        headers: {
+          'X-Shopify-Storefront-Access-Token': STOREFRONT_TOKEN,
+          'Content-Type': 'application/json'
+        }
+      }
     );
+
     res.json(response.data);
   } catch (err) {
     console.error(err.response?.data || err.message);
