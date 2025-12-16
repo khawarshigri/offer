@@ -6,11 +6,7 @@ const cors = require('cors');
 const app = express();
 
 // Allow your specific Shopify domain
-app.use(cors({
-    origin: ['https://nr1mrt-5a.myshopify.com'],
-    methods: ['POST', 'GET', 'OPTIONS'],
-    allowedHeaders: ['Content-Type']
-}));
+app.use(cors());
 
 app.use(express.json());
 
