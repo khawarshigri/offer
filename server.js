@@ -30,7 +30,7 @@ app.post('/create-bid-checkout', async (req, res) => {
             url: `https://${SHOP}/admin/api/2024-01/draft_orders.json`,
             method: 'POST',
             headers: {
-                'X-Shopify-Access-Token': ADMIN_TOKEN,
+                // 'X-Shopify-Access-Token': ADMIN_TOKEN,
                 'Content-Type': 'application/json'
             },
             data: {
