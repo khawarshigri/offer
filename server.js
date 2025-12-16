@@ -4,18 +4,28 @@ const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+// FIX 1: Explicitly allow your Shopify domain to prevent browser blocks
+app.use(cors({
+    origin: ['https://nr1mrt-5a.myshopify.com',"https://admin.shopify.com"], 
+    methods: ['POST', 'GET', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+}));
+
 app.use(express.json());
 
-// CONFIGURATION
-const SHOP = process.env.SHOPIFY_STORE; // e.g., 'your-store.myshopify.com'
-const ADMIN_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN; // Admin API Password/Token
+const SHOP = process.env.SHOPIFY_STORE; 
+const ADMIN_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
 
 app.post('/create-bid-checkout', async (req, res) => {
     const { variantId, bidAmount, productTitle, variantTitle } = req.body;
 
+    // FIX 2: Basic validation to prevent server crashes on empty bodies
+    if (!variantId || !bidAmount) {
+        return res.status(400).json({ success: false, message: 'Missing required bid data' });
+    }
+
     try {
-        // 1. Create a Draft Order in Shopify with the CUSTOM price
         const response = await axios({
             url: `https://${SHOP}/admin/api/2024-01/draft_orders.json`,
             method: 'POST',
@@ -29,23 +39,19 @@ app.post('/create-bid-checkout', async (req, res) => {
                         {
                             variant_id: variantId,
                             quantity: 1,
-                            price: bidAmount, // This is where the magic happens
+                            price: bidAmount,
                             title: productTitle,
                             properties: [
                                 { name: "Order Type", value: "Accepted Bid" }
                             ]
                         }
                     ],
-                    applied_discount: {
-                        description: "Negotiated Bid Price",
-                        value_type: "fixed_amount",
-                        value: 0 // We set price directly, so no discount needed
-                    }
+                    // Automatically mark as "Pending" so the checkout link works
+                    use_customer_default_address: true
                 }
             }
         });
 
-        // 2. Send the Invoice/Checkout URL back to the frontend
         const checkoutUrl = response.data.draft_order.invoice_url;
         
         res.json({
@@ -55,9 +61,12 @@ app.post('/create-bid-checkout', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Shopify API Error:', error.response ? error.response.data : error.message);
-        res.status(500).json({ success: false, message: 'Failed to create checkout' });
+        // Detailed logging for Railway dashboard
+        console.error('Shopify API Error Detail:', error.response ? JSON.stringify(error.response.data) : error.message);
+        res.status(500).json({ success: false, message: 'Shopify API rejected the request' });
     }
 });
 
-app.listen(3000, () => console.log('Bidding Server running on port 3000'));
+// FIX 3: Use the dynamic port provided by Railway
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => console.log(`Bidding Server running on port ${PORT}`));
