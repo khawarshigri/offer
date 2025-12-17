@@ -4,11 +4,22 @@ const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+// 1. UPDATED CORS: This allows Shopify to talk to Railway without security blocks
+app.use(cors({
+    origin: '*', 
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'X-Shopify-Access-Token']
+}));
+
 app.use(express.json());
 
 const SHOP = process.env.SHOPIFY_STORE; 
 const ADMIN_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
+
+app.get('/', (req, res) => {
+    res.send("Bid API is Online and Running!");
+});
 
 app.post('/create-bid-checkout', async (req, res) => {
     const { variantId, bidAmount, productTitle } = req.body;
@@ -24,35 +35,29 @@ app.post('/create-bid-checkout', async (req, res) => {
             data: {
                 draft_order: {
                     line_items: [{
-                        variant_id: Number(variantId),
+                        variant_id: Number(variantId), 
                         quantity: 1,
                         price: bidAmount,
                         title: productTitle
                     }],
-                    // REQUIRED to generate the checkout link (invoice_url)
                     use_customer_default_address: true,
-                    email: "bidding-guest@example.com" 
+                    email: "bidding-customer@example.com" 
                 }
             }
         });
 
+        // Ensure we send back the invoice_url correctly
         const checkoutUrl = response.data.draft_order.invoice_url;
-
-        if (checkoutUrl) {
-            res.json({ success: true, checkoutUrl: checkoutUrl });
-        } else {
-            console.error("Shopify error: No invoice_url returned.");
-            res.status(500).json({ success: false, message: "Shopify failed to generate a checkout link." });
-        }
+        res.json({ success: true, checkoutUrl: checkoutUrl });
 
     } catch (error) {
-        console.error('Shopify Error Details:', error.response ? JSON.stringify(error.response.data) : error.message);
+        console.error('SHOPIFY ERROR:', error.response ? JSON.stringify(error.response.data) : error.message);
         res.status(500).json({ 
             success: false, 
-            message: error.response ? JSON.stringify(error.response.data) : "Internal Server Error" 
+            message: error.response ? error.response.data.errors : "Shopify API Error" 
         });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Server live on port ${PORT}`));
