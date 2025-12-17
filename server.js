@@ -4,26 +4,14 @@ const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-
-// Enable CORS and JSON parsing
 app.use(cors());
 app.use(express.json());
 
 const SHOP = process.env.SHOPIFY_STORE; 
 const ADMIN_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
 
-app.get('/', (req, res) => {
-    res.send("Bid API is Online and Running!");
-});
-
 app.post('/create-bid-checkout', async (req, res) => {
     const { variantId, bidAmount, productTitle } = req.body;
-
-    // Safety check for variables
-    if (!ADMIN_TOKEN || !SHOP) {
-        console.error("CRITICAL ERROR: Environment variables are missing in Railway!");
-        return res.status(500).json({ success: false, message: "Server configuration error" });
-    }
 
     try {
         const response = await axios({
@@ -36,39 +24,35 @@ app.post('/create-bid-checkout', async (req, res) => {
             data: {
                 draft_order: {
                     line_items: [{
-                        // Shopify rejects variant IDs if they are sent as strings
-                        variant_id: Number(variantId), 
+                        variant_id: Number(variantId),
                         quantity: 1,
                         price: bidAmount,
-                        title: productTitle,
-                        properties: [{ name: "Order Type", value: "Accepted Bid" }]
+                        title: productTitle
                     }],
-                    // Required for creating a checkout URL
+                    // REQUIRED to generate the checkout link (invoice_url)
                     use_customer_default_address: true,
-                    email: "bidding-customer@example.com" 
+                    email: "bidding-guest@example.com" 
                 }
             }
         });
 
-        res.json({
-            success: true,
-            checkoutUrl: response.data.draft_order.invoice_url
-        });
+        const checkoutUrl = response.data.draft_order.invoice_url;
+
+        if (checkoutUrl) {
+            res.json({ success: true, checkoutUrl: checkoutUrl });
+        } else {
+            console.error("Shopify error: No invoice_url returned.");
+            res.status(500).json({ success: false, message: "Shopify failed to generate a checkout link." });
+        }
 
     } catch (error) {
-        // This will print the exact reason (e.g., "Invalid Token") in Railway Logs
-        if (error.response) {
-            console.error('SHOPIFY ERROR DETAILS:', JSON.stringify(error.response.data));
-            res.status(error.response.status).json({ 
-                success: false, 
-                message: error.response.data.errors || "Shopify API Error" 
-            });
-        } else {
-            console.error('NETWORK ERROR:', error.message);
-            res.status(500).json({ success: false, message: "Could not connect to Shopify" });
-        }
+        console.error('Shopify Error Details:', error.response ? JSON.stringify(error.response.data) : error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: error.response ? JSON.stringify(error.response.data) : "Internal Server Error" 
+        });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Server live on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
